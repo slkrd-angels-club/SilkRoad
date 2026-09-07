@@ -43,7 +43,7 @@ annual Silicon Valley Summit.
 Silkroad Innovation Hub, est. 2023, is a bridge between Silicon Valley and
 Central Eurasia (a founder network across 13+ countries). Portfolio: 40
 investments, 1 unicorn, 3 companies valued at $100M+, 2–12x valuation growth on
-select deals, ~$300M raised by portfolio companies, and $1.1M invested through
+select deals, ~$300M raised by portfolio companies, and $1.23M invested through
 the Angel Club. Platinum Partner of TechCrunch Disrupt (2023–2026) and host of
 Central Eurasia @ Silicon Valley (1300+ attendees, 157 VCs).
 
