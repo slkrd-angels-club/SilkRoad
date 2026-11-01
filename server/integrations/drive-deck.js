@@ -3,7 +3,7 @@
 const TIMEOUT_MS = 60_000
 
 export function driveDeckConfigured(env = process.env) {
-  return Boolean(env.N8N_DECK_WEBHOOK_URL && env.N8N_DECK_WEBHOOK_SECRET)
+  return Boolean(env.N8N_DECK_WEBHOOK_URL)
 }
 
 export async function sendDeckToDrive({ bytes, filename, contentType, company }, env = process.env) {
@@ -15,7 +15,6 @@ export async function sendDeckToDrive({ bytes, filename, contentType, company },
 
   const response = await fetch(env.N8N_DECK_WEBHOOK_URL, {
     method: 'POST',
-    headers: { 'x-sra-secret': env.N8N_DECK_WEBHOOK_SECRET },
     body: form,
     signal: AbortSignal.timeout(TIMEOUT_MS),
   })
