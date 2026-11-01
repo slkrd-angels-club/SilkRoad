@@ -89,3 +89,11 @@ test('existing investor is updated instead of duplicated', async () => {
     delete process.env.NOTION_TOKEN
   }
 })
+
+test('Telegram button opens the CRM card when one exists, else the application', async () => {
+  const { createApplicationSubmittedNotification } = await import('../server/notifications/application-submitted.js')
+  const withCrm = createApplicationSubmittedNotification(founder, 'https://notion.so/app', 'https://notion.so/crm')
+  assert.deepEqual(withCrm.action, { label: 'Open in Dealflow CRM', url: 'https://notion.so/crm' })
+  const fallback = createApplicationSubmittedNotification(investor, 'https://notion.so/app', undefined)
+  assert.equal(fallback.action.url, 'https://notion.so/app')
+})

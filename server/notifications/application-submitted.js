@@ -42,19 +42,22 @@ function investorMessage(application) {
 }
 
 const MESSAGE_FORMATTERS = { founder: founderMessage, investor: investorMessage }
+const CRM_LABELS = { founder: 'Open in Dealflow CRM', investor: 'Open in Investor CRM' }
 
-export function createApplicationSubmittedNotification(application, notionPageUrl) {
+export function createApplicationSubmittedNotification(application, notionPageUrl, crmPageUrl) {
   const format = MESSAGE_FORMATTERS[application.type]
   if (!format) throw new TypeError(`Unsupported application type: ${application.type}`)
   return {
     text: format(application),
-    action: { label: 'Open in Notion', url: notionPageUrl },
+    action: crmPageUrl
+      ? { label: CRM_LABELS[application.type], url: crmPageUrl }
+      : { label: 'Open in Notion', url: notionPageUrl },
   }
 }
 
-export async function notifyApplicationSubmitted(application, notionPageUrl) {
+export async function notifyApplicationSubmitted(application, notionPageUrl, crmPageUrl) {
   try {
-    return await sendTelegramMessage(createApplicationSubmittedNotification(application, notionPageUrl))
+    return await sendTelegramMessage(createApplicationSubmittedNotification(application, notionPageUrl, crmPageUrl))
   } catch (error) {
     console.warn('Could not send Telegram application notification:', error?.message || error)
     return false
