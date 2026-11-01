@@ -187,6 +187,7 @@ export type Dict = {
     deckErrEmpty: string
     description: string
     descriptionHint: string
+    descriptionHintNoAi: string
     message: string
     optional: string
     select: string
@@ -440,6 +441,7 @@ export const CONTENT: Record<'ru' | 'en', Dict> = {
       deckErrEmpty: 'Не удалось извлечь текст из файла',
       description: 'Что вы строите?',
       descriptionHint: 'Продукт, тяга, почему сейчас — пару предложений. Заявку сразу оценит ИИ.',
+      descriptionHintNoAi: 'Продукт, тяга, почему сейчас — пару предложений.',
       message: 'Коротко о себе',
       optional: 'необязательно',
       select: 'Выберите',
@@ -673,6 +675,7 @@ export const CONTENT: Record<'ru' | 'en', Dict> = {
       deckErrEmpty: 'Could not extract text from the file',
       description: 'What are you building?',
       descriptionHint: 'Product, traction, why now — a few sentences. Our AI reviews it instantly.',
+      descriptionHintNoAi: 'Product, traction, why now — a few sentences.',
       message: 'A little about you',
       optional: 'optional',
       select: 'Select',

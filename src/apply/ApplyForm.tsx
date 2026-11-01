@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react'
+import { AI_ENABLED } from '../lib/features'
 import { motion } from 'framer-motion'
 import { useI18n } from '../i18n'
 import { ArrowUpRight } from '../components/ui'
@@ -129,11 +130,11 @@ export function ApplyForm({ initialTab = 'investor' }: { initialTab?: Tab }) {
       return
     }
 
-    // Founder: run the AI pre-screen.
-    setPhase('screening')
+    // Founder: run the AI pre-screen (only when AI features are switched on).
     setScreen(null)
     let screeningResult: Screening | null = null
-    try {
+    if (AI_ENABLED) try {
+      setPhase('screening')
       const res = await fetch('/api/screen', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -315,7 +316,7 @@ export function ApplyForm({ initialTab = 'investor' }: { initialTab?: Tab }) {
               </div>
               <div className="sm:col-span-2">
                 <Label text={a.description} />
-                <p className="mb-2 text-[13px] text-ink-45">{a.descriptionHint}</p>
+                <p className="mb-2 text-[13px] text-ink-45">{AI_ENABLED ? a.descriptionHint : a.descriptionHintNoAi}</p>
                 <textarea
                   rows={4}
                   value={v.description ?? ''}
