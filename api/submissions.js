@@ -32,7 +32,7 @@ export async function submissionsHandler(req, res) {
     const application = normalizeSubmission(body)
     const saved = await saveApplication(application)
     // CRM card first, so the Telegram button can open it (falls back to the application page).
-    const crm = await syncApplicationToCrm(application, saved.page.url)
+    const crm = await syncApplicationToCrm({ ...application, deckFile: saved.deck }, saved.page.url)
     await Promise.all([
       bestEffortCleanup(saved.deckBlobUrl),
       notifyApplicationSubmitted(application, saved.page.url, crm?.page?.url),

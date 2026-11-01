@@ -170,7 +170,7 @@ async function uploadDeckToNotion(deckBlob) {
       filename,
       contentType: metadata.contentType,
     })
-    return { id: completed.id, filename, blobUrl: url }
+    return { id: completed.id, filename, blobUrl: url, bytes, contentType: metadata.contentType }
   } catch (error) {
     if (error instanceof NotionError) {
       throw new SubmissionError(error.message, error.statusCode, 'DECK_UPLOAD_FAILED')
@@ -305,7 +305,13 @@ export async function saveApplication(application) {
       children: founderBlocks(application),
     },
   })
-  return { page, deckBlobUrl: deckUpload?.blobUrl || null }
+  return {
+    page,
+    deckBlobUrl: deckUpload?.blobUrl || null,
+    deck: deckUpload
+      ? { bytes: deckUpload.bytes, filename: deckUpload.filename, contentType: deckUpload.contentType }
+      : null,
+  }
 }
 
 export async function cleanupDeckBlob(value) {

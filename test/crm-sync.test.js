@@ -97,3 +97,28 @@ test('Telegram button opens the CRM card when one exists, else the application',
   const fallback = createApplicationSubmittedNotification(investor, 'https://notion.so/app', undefined)
   assert.equal(fallback.action.url, 'https://notion.so/app')
 })
+
+test('uploaded PDF is attached to the new Dealflow card', async () => {
+  const realFetch = globalThis.fetch
+  process.env.NOTION_TOKEN = 'test'
+  let createdBody = null
+  globalThis.fetch = async (url, init) => {
+    const u = String(url)
+    let body = {}
+    if (u.endsWith('/query')) body = { results: [] }
+    else if (u.endsWith('/file_uploads')) body = { id: 'fu-1' }
+    else if (u.endsWith('/send')) body = { id: 'fu-1', status: 'uploaded' }
+    else if (u.endsWith('/pages')) { createdBody = JSON.parse(init.body); body = { id: 'card', url: 'https://notion.so/card' } }
+    return new Response(JSON.stringify(body), { status: 200 })
+  }
+  try {
+    const deckFile = { bytes: new Uint8Array([37, 80, 68, 70]), filename: 'deck.pdf', contentType: 'application/pdf' }
+    const result = await syncApplicationToCrm({ ...founder, deckFile }, 'https://notion.so/app', {})
+    assert.equal(result.action, 'created')
+    assert.equal(createdBody.children[0].type, 'file')
+    assert.equal(createdBody.children[0].file.file_upload.id, 'fu-1')
+  } finally {
+    globalThis.fetch = realFetch
+    delete process.env.NOTION_TOKEN
+  }
+})
