@@ -103,19 +103,20 @@ test('a deck uploaded to Google Drive becomes the Deck link on the card', () => 
   assert.equal(p.Deck.url, 'https://drive.google.com/file/d/abc/view')
 })
 
-test('deck is sent to the n8n Drive webhook', async () => {
+test('deck is sent to the Google Drive upload script', async () => {
   const { sendDeckToDrive } = await import('../server/integrations/drive-deck.js')
   const realFetch = globalThis.fetch
   let seen = null
   globalThis.fetch = async (url, init) => {
-    seen = { url: String(url), file: init.body.get('deck') }
+    seen = { url: String(url), body: JSON.parse(init.body) }
     return new Response(JSON.stringify({ ok: true, url: 'https://drive.google.com/file/d/xyz/view' }), { status: 200 })
   }
   try {
-    const env = { N8N_DECK_WEBHOOK_URL: 'https://n8n.example/webhook/sra-deck-abc' }
+    const env = { DRIVE_DECK_UPLOAD_URL: 'https://script.google.com/macros/s/abc/exec' }
     const url = await sendDeckToDrive({ bytes: new Uint8Array([1]), filename: 'deck.pdf', contentType: 'application/pdf', company: 'Acme' }, env)
     assert.equal(url, 'https://drive.google.com/file/d/xyz/view')
-    assert.equal(seen.file.name, 'deck.pdf')
+    assert.equal(seen.body.filename, 'deck.pdf')
+    assert.equal(seen.body.data, 'AQ==')
   } finally {
     globalThis.fetch = realFetch
   }
