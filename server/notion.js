@@ -13,7 +13,8 @@ import {
   toggle,
   textChunks,
 } from './integrations/notion-blocks.js'
-import { NotionError, notionRequest, uploadFileToNotion } from './integrations/notion.js'
+import { notionRequest } from './integrations/notion.js'
+import { sendDeckToDrive } from './integrations/drive-deck.js'
 
 const MAX_DECK_BYTES = 15 * 1024 * 1024
 const DECK_PREFIX = 'applications/decks/'
@@ -140,7 +141,7 @@ function validateBlobUrl(value) {
   }
 }
 
-async function uploadDeckToNotion(deckBlob) {
+async function readDeckBlob(deckBlob) {
   if (!process.env.BLOB_READ_WRITE_TOKEN && !process.env.VERCEL_OIDC_TOKEN) {
     throw new SubmissionError('Deck storage is not configured.', 503, 'CONFIGURATION_ERROR')
   }
@@ -164,18 +165,19 @@ async function uploadDeckToNotion(deckBlob) {
 
   const bytes = await new Response(file.stream).arrayBuffer()
   const filename = safeFilename(deckBlob.filename || metadata.pathname, metadata.contentType)
+  return { bytes, filename, contentType: metadata.contentType, blobUrl: url }
+}
+
+// The PDF is stored in Google Drive (via n8n), never in Notion. Notion and the CRM get the link.
+// A Drive failure never loses the application: it is saved without the link and flagged.
+async function storeDeckInDrive(application) {
+  const deck = await readDeckBlob(application.deckBlob)
   try {
-    const completed = await uploadFileToNotion({
-      bytes,
-      filename,
-      contentType: metadata.contentType,
-    })
-    return { id: completed.id, filename, blobUrl: url, bytes, contentType: metadata.contentType }
+    const url = await sendDeckToDrive({ ...deck, company: application.company })
+    return { url, blobUrl: deck.blobUrl, failed: false }
   } catch (error) {
-    if (error instanceof NotionError) {
-      throw new SubmissionError(error.message, error.statusCode, 'DECK_UPLOAD_FAILED')
-    }
-    throw error
+    console.warn('Could not save deck to Google Drive:', error?.message || error)
+    return { url: null, blobUrl: deck.blobUrl, failed: true }
   }
 }
 
@@ -205,6 +207,29 @@ function founderBlocks(application) {
     })
   }
 
+  if (application.deckFileUrl) {
+    blocks.push({
+      object: 'block',
+      type: 'paragraph',
+      paragraph: {
+        rich_text: [
+          ...notionText('Pitch deck (Google Drive): ', { bold: true }),
+          ...notionText('open PDF', undefined, application.deckFileUrl),
+        ],
+      },
+    })
+  }
+  if (application.deckUploadFailed) {
+    blocks.push({
+      object: 'block',
+      type: 'callout',
+      callout: {
+        rich_text: notionText('The founder attached a deck, but saving it to Google Drive failed. Ask the founder for a link.'),
+        icon: { type: 'emoji', emoji: '⚠️' },
+        color: 'yellow_background',
+      },
+    })
+  }
   if (application.deckText) blocks.push(deckTextToggle(application.deckText))
 
   const report = application.screening
@@ -273,8 +298,11 @@ export async function saveApplication(application) {
   const dataSourceId = process.env.NOTION_FOUNDERS_DATA_SOURCE_ID
   if (!dataSourceId) throw new SubmissionError('Founder database is not configured.', 503, 'CONFIGURATION_ERROR')
 
-  let deckUpload = null
-  if (application.deckBlob) deckUpload = await uploadDeckToNotion(application.deckBlob)
+  let driveDeck = null
+  if (application.deckBlob) driveDeck = await storeDeckInDrive(application)
+  const deckUrl = application.deckUrl || driveDeck?.url || null
+  if (driveDeck?.url) application.deckFileUrl = driveDeck.url
+  if (driveDeck?.failed) application.deckUploadFailed = true
 
   const properties = {
     Company: title(application.company),
@@ -282,12 +310,7 @@ export async function saveApplication(application) {
     Email: { email: application.email },
     Phone: { phone_number: application.phone },
     Stage: { select: { name: application.stage } },
-    'Deck URL': { url: application.deckUrl || null },
-    'Deck File': {
-      files: deckUpload
-        ? [{ type: 'file_upload', file_upload: { id: deckUpload.id }, name: deckUpload.filename }]
-        : [],
-    },
+    'Deck URL': { url: deckUrl },
     Language: { select: { name: application.lang.toUpperCase() } },
     Status: { select: { name: 'New' } },
     'Submitted At': { date: { start: application.submittedAt } },
@@ -305,13 +328,7 @@ export async function saveApplication(application) {
       children: founderBlocks(application),
     },
   })
-  return {
-    page,
-    deckBlobUrl: deckUpload?.blobUrl || null,
-    deck: deckUpload
-      ? { bytes: deckUpload.bytes, filename: deckUpload.filename, contentType: deckUpload.contentType }
-      : null,
-  }
+  return { page, deckBlobUrl: driveDeck?.blobUrl || null }
 }
 
 export async function cleanupDeckBlob(value) {

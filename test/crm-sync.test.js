@@ -98,27 +98,26 @@ test('Telegram button opens the CRM card when one exists, else the application',
   assert.equal(fallback.action.url, 'https://notion.so/app')
 })
 
-test('uploaded PDF is attached to the new Dealflow card', async () => {
+test('a deck uploaded to Google Drive becomes the Deck link on the card', () => {
+  const p = dealflowProperties({ ...founder, deckUrl: null, deckFileUrl: 'https://drive.google.com/file/d/abc/view' })
+  assert.equal(p.Deck.url, 'https://drive.google.com/file/d/abc/view')
+})
+
+test('deck is sent to the n8n Drive webhook with the shared secret', async () => {
+  const { sendDeckToDrive } = await import('../server/integrations/drive-deck.js')
   const realFetch = globalThis.fetch
-  process.env.NOTION_TOKEN = 'test'
-  let createdBody = null
+  let seen = null
   globalThis.fetch = async (url, init) => {
-    const u = String(url)
-    let body = {}
-    if (u.endsWith('/query')) body = { results: [] }
-    else if (u.endsWith('/file_uploads')) body = { id: 'fu-1' }
-    else if (u.endsWith('/send')) body = { id: 'fu-1', status: 'uploaded' }
-    else if (u.endsWith('/pages')) { createdBody = JSON.parse(init.body); body = { id: 'card', url: 'https://notion.so/card' } }
-    return new Response(JSON.stringify(body), { status: 200 })
+    seen = { url: String(url), secret: init.headers['x-sra-secret'], file: init.body.get('deck') }
+    return new Response(JSON.stringify({ ok: true, url: 'https://drive.google.com/file/d/xyz/view' }), { status: 200 })
   }
   try {
-    const deckFile = { bytes: new Uint8Array([37, 80, 68, 70]), filename: 'deck.pdf', contentType: 'application/pdf' }
-    const result = await syncApplicationToCrm({ ...founder, deckFile }, 'https://notion.so/app', {})
-    assert.equal(result.action, 'created')
-    assert.equal(createdBody.children[0].type, 'file')
-    assert.equal(createdBody.children[0].file.file_upload.id, 'fu-1')
+    const env = { N8N_DECK_WEBHOOK_URL: 'https://n8n.example/webhook/sra-deck-upload', N8N_DECK_WEBHOOK_SECRET: 's3cret' }
+    const url = await sendDeckToDrive({ bytes: new Uint8Array([1]), filename: 'deck.pdf', contentType: 'application/pdf', company: 'Acme' }, env)
+    assert.equal(url, 'https://drive.google.com/file/d/xyz/view')
+    assert.equal(seen.secret, 's3cret')
+    assert.equal(seen.file.name, 'deck.pdf')
   } finally {
     globalThis.fetch = realFetch
-    delete process.env.NOTION_TOKEN
   }
 })

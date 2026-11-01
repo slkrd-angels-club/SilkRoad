@@ -1,5 +1,5 @@
-import { notionRequest, uploadFileToNotion } from './integrations/notion.js'
-import { fileBlock, labeledParagraph, notionText, paragraph, richText, title } from './integrations/notion-blocks.js'
+import { notionRequest } from './integrations/notion.js'
+import { labeledParagraph, notionText, paragraph, richText, title } from './integrations/notion-blocks.js'
 import { deckTextToggle } from './notion.js'
 
 // Silkroad workspace CRMs. IDs are not secrets; env vars let another workspace override them.
@@ -51,7 +51,8 @@ export function dealflowProperties(application) {
     Notes: richText(shorten(application.description, NOTES_LIMIT)),
     'Date Added': { date: { start: day(application.submittedAt) } },
   }
-  if (application.deckUrl) properties.Deck = { url: application.deckUrl }
+  const deck = application.deckUrl || application.deckFileUrl
+  if (deck) properties.Deck = { url: deck }
   if (ROUND_STAGES.has(application.stage)) properties['Round Stage'] = { select: { name: application.stage } }
   return properties
 }
@@ -122,35 +123,16 @@ async function createPage(dataSourceId, properties, children) {
   })
 }
 
-// The PDF itself goes onto the Dealflow card, so the team and the screening agent
-// (n8n reads file blocks on the card) both have the original deck.
-async function deckFileBlocks(application) {
-  const deck = application.deckFile
-  if (!deck?.bytes) return []
-  try {
-    const upload = await uploadFileToNotion(deck)
-    return [fileBlock(upload.id, deck.filename)]
-  } catch (error) {
-    console.warn('Could not attach deck to CRM card:', error?.message || error)
-    return []
-  }
-}
-
 async function syncFounder(application, applicationUrl, config) {
-  const deckBlocks = await deckFileBlocks(application)
   const existing = await findOne(config.dealflow, { property: 'Startup', title: { equals: application.company } })
   if (existing) {
     await appendBlocks(existing.id, [
       paragraph(`🔁 New website application ${day(application.submittedAt)}`),
-      ...deckBlocks,
       ...dealflowBlocks(application, applicationUrl),
     ])
     return { action: 'updated', page: existing }
   }
-  const page = await createPage(config.dealflow, dealflowProperties(application), [
-    ...deckBlocks,
-    ...dealflowBlocks(application, applicationUrl),
-  ])
+  const page = await createPage(config.dealflow, dealflowProperties(application), dealflowBlocks(application, applicationUrl))
   return { action: 'created', page }
 }
 
