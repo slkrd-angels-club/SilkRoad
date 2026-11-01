@@ -54,7 +54,15 @@ async function cleanup(blob: PutBlobResult | null) {
 export async function submitApplication(input: SubmitApplicationInput) {
   let blob: PutBlobResult | null = null
   try {
-    if (input.tab === 'founder' && input.deckFile) blob = await uploadDeck(input.deckFile)
+    if (input.tab === 'founder' && input.deckFile) {
+      try {
+        blob = await uploadDeck(input.deckFile)
+      } catch (error) {
+        // Never lose an application because file storage is down or not configured:
+        // submit without the file (the extracted deck text still goes along).
+        console.warn('Deck upload failed, submitting without the file:', error)
+      }
+    }
 
     const response = await fetch('/api/submissions', {
       method: 'POST',
