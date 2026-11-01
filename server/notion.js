@@ -10,6 +10,8 @@ import {
   richText,
   textChunks as chunks,
   title,
+  toggle,
+  textChunks,
 } from './integrations/notion-blocks.js'
 import { NotionError, notionRequest, uploadFileToNotion } from './integrations/notion.js'
 
@@ -177,6 +179,10 @@ async function uploadDeckToNotion(deckBlob) {
   }
 }
 
+export function deckTextToggle(text) {
+  return toggle('📄 Pitch deck text (extracted)', textChunks(text).map(paragraph).slice(0, 90))
+}
+
 function founderBlocks(application) {
   const blocks = [
     heading('Application'),
@@ -199,20 +205,22 @@ function founderBlocks(application) {
     })
   }
 
-  blocks.push(divider(), heading('AI Screening Report'))
+  if (application.deckText) blocks.push(deckTextToggle(application.deckText))
+
   const report = application.screening
   if (!report) {
-    blocks.push({
+    blocks.push(divider(), {
       object: 'block',
       type: 'callout',
       callout: {
-        rich_text: notionText('Automated screening was unavailable. Review this application manually.'),
-        icon: { type: 'emoji', emoji: '⚠️' },
-        color: 'yellow_background',
+        rich_text: notionText('No website pre-screen. The screening agent scores this deal in Dealflow CRM.'),
+        icon: { type: 'emoji', emoji: 'ℹ️' },
+        color: 'gray_background',
       },
     })
     return blocks
   }
+  blocks.push(divider(), heading('AI Screening Report'))
 
   if (report.summary) {
     blocks.push({
