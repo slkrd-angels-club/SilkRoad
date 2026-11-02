@@ -1,4 +1,3 @@
-import type { PutBlobResult } from '@vercel/blob'
 import type { Screening } from './screening'
 
 type ApplicationTab = 'investor' | 'founder'
@@ -16,74 +15,65 @@ type SubmitApplicationInput = {
 const PDF = 'application/pdf'
 const PPTX = 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
 
-function safePathname(filename: string) {
-  const safe = filename
-    .normalize('NFKC')
-    .replace(/[\\/]/g, '-')
-    .replace(/[^\p{L}\p{N}._ ()-]+/gu, '-')
-    .slice(-180)
-  const unique = typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`
-  return `applications/decks/${unique}-${safe || 'pitch-deck.pdf'}`
-}
-
 function deckContentType(file: File) {
   if (file.type === PDF || file.name.toLowerCase().endsWith('.pdf')) return PDF
   return PPTX
 }
 
-async function uploadDeck(file: File) {
-  const { upload } = await import('@vercel/blob/client')
-  return upload(safePathname(file.name), file, {
-    access: 'private',
-    handleUploadUrl: '/api/deck-upload',
-    contentType: deckContentType(file),
-    multipart: file.size > 5 * 1024 * 1024,
+// Decks go straight from the browser to the Silkroad Google Drive folder through a Google Apps
+// Script web app (scripts/drive-deck-upload.gs). The site only stores the returned Drive link.
+const DRIVE_DECK_UPLOAD_URL =
+  import.meta.env.VITE_DRIVE_DECK_UPLOAD_URL ||
+  'https://script.google.com/macros/s/AKfycbz1sGb0GD6C7Fy67RLU-19U5PN50iHv0Pn7ZXv5z5-K-H-ZjLSPhmeGJv04scSRdHxsBg/exec'
+
+function toBase64(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result).split(',')[1] || '')
+    reader.onerror = () => reject(reader.error)
+    reader.readAsDataURL(file)
   })
 }
 
-async function cleanup(blob: PutBlobResult | null) {
-  if (!blob) return
-  await fetch('/api/blob-cleanup', {
+async function uploadDeckToDrive(file: File, company: string): Promise<string> {
+  const response = await fetch(DRIVE_DECK_UPLOAD_URL, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ url: blob.url }),
-    keepalive: true,
-  }).catch(() => undefined)
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ company, filename: file.name, contentType: deckContentType(file), data: await toBase64(file) }),
+  })
+  const body = await response.json().catch(() => null)
+  if (!body?.ok || !/^https:\/\/drive\.google\.com\//.test(body.url || '')) throw new Error('DRIVE_UPLOAD_FAILED')
+  return body.url
 }
 
 export async function submitApplication(input: SubmitApplicationInput) {
-  let blob: PutBlobResult | null = null
-  try {
-    if (input.tab === 'founder' && input.deckFile) {
-      try {
-        blob = await uploadDeck(input.deckFile)
-      } catch (error) {
-        // Never lose an application because file storage is down or not configured:
-        // submit without the file (the extracted deck text still goes along).
-        console.warn('Deck upload failed, submitting without the file:', error)
-      }
+  let deckFileUrl: string | null = null
+  let deckUploadFailed = false
+  if (input.tab === 'founder' && input.deckFile) {
+    try {
+      deckFileUrl = await uploadDeckToDrive(input.deckFile, input.values.company || '')
+    } catch (error) {
+      // Never lose an application because the upload failed: submit without the file.
+      console.warn('Deck upload failed, submitting without the file:', error)
+      deckUploadFailed = true
     }
-
-    const response = await fetch('/api/submissions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        tab: input.tab,
-        lang: input.lang,
-        values: input.values,
-        screening: input.screening,
-        deckText: input.deckText || undefined,
-        contactWebsite: input.values.contactWebsite || '',
-        deckBlob: blob
-          ? { url: blob.url, pathname: blob.pathname, filename: input.deckFile?.name || blob.pathname }
-          : undefined,
-      }),
-    })
-    const body = await response.json().catch(() => null)
-    if (!response.ok || !body?.ok) throw new Error(body?.code || 'SUBMISSION_FAILED')
-    return body
-  } catch (error) {
-    await cleanup(blob)
-    throw error
   }
+
+  const response = await fetch('/api/submissions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      tab: input.tab,
+      lang: input.lang,
+      values: input.values,
+      screening: input.screening,
+      deckText: input.deckText || undefined,
+      contactWebsite: input.values.contactWebsite || '',
+      deckFileUrl: deckFileUrl || undefined,
+      deckUploadFailed: deckUploadFailed || undefined,
+    }),
+  })
+  const body = await response.json().catch(() => null)
+  if (!response.ok || !body?.ok) throw new Error(body?.code || 'SUBMISSION_FAILED')
+  return body
 }

@@ -121,3 +121,12 @@ test('deck is sent to the Google Drive upload script', async () => {
     globalThis.fetch = realFetch
   }
 })
+
+test('only real Google Drive file links are accepted from the browser', async () => {
+  const { normalizeSubmission } = await import('../server/notion.js')
+  const base = { tab: 'founder', values: { name: 'A', email: 'a@b.co', phone: '1', company: 'X', stage: 'Seed', description: 'd' } }
+  const ok = normalizeSubmission({ ...base, deckFileUrl: 'https://drive.google.com/file/d/1Ga_WeO-q/view' })
+  assert.equal(ok.deckFileUrl, 'https://drive.google.com/file/d/1Ga_WeO-q/view')
+  const bad = normalizeSubmission({ ...base, deckFileUrl: 'https://evil.example/drive.google.com/file/d/x/view' })
+  assert.equal(bad.deckFileUrl, null)
+})
