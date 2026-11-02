@@ -1,5 +1,6 @@
 import { notionRequest } from './integrations/notion.js'
 import { labeledParagraph, notionText, paragraph, richText, title } from './integrations/notion-blocks.js'
+import { deckTextToggle } from './notion.js'
 
 // Silkroad workspace CRMs. IDs are not secrets; env vars let another workspace override them.
 const DEFAULT_DEALFLOW_DATA_SOURCE_ID = 'cef7ef17-f8ee-4f49-ae52-57f96ea3c53b'
@@ -50,7 +51,8 @@ export function dealflowProperties(application) {
     Notes: richText(shorten(application.description, NOTES_LIMIT)),
     'Date Added': { date: { start: day(application.submittedAt) } },
   }
-  if (application.deckUrl) properties.Deck = { url: application.deckUrl }
+  const deck = application.deckUrl || application.deckFileUrl
+  if (deck) properties.Deck = { url: deck }
   if (ROUND_STAGES.has(application.stage)) properties['Round Stage'] = { select: { name: application.stage } }
   return properties
 }
@@ -64,6 +66,7 @@ export function dealflowBlocks(application, applicationUrl) {
     blocks.push(labeledParagraph('Website AI pre-score', `${application.screening.score}/100 — ${application.screening.verdict}`))
   }
   blocks.push(labeledParagraph('Description', shorten(application.description, 1_900)))
+  if (application.deckText) blocks.push(deckTextToggle(application.deckText))
   return blocks
 }
 

@@ -97,3 +97,27 @@ test('Telegram button opens the CRM card when one exists, else the application',
   const fallback = createApplicationSubmittedNotification(investor, 'https://notion.so/app', undefined)
   assert.equal(fallback.action.url, 'https://notion.so/app')
 })
+
+test('a deck uploaded to Google Drive becomes the Deck link on the card', () => {
+  const p = dealflowProperties({ ...founder, deckUrl: null, deckFileUrl: 'https://drive.google.com/file/d/abc/view' })
+  assert.equal(p.Deck.url, 'https://drive.google.com/file/d/abc/view')
+})
+
+test('deck is sent to the Google Drive upload script', async () => {
+  const { sendDeckToDrive } = await import('../server/integrations/drive-deck.js')
+  const realFetch = globalThis.fetch
+  let seen = null
+  globalThis.fetch = async (url, init) => {
+    seen = { url: String(url), body: JSON.parse(init.body) }
+    return new Response(JSON.stringify({ ok: true, url: 'https://drive.google.com/file/d/xyz/view' }), { status: 200 })
+  }
+  try {
+    const env = { DRIVE_DECK_UPLOAD_URL: 'https://script.google.com/macros/s/abc/exec' }
+    const url = await sendDeckToDrive({ bytes: new Uint8Array([1]), filename: 'deck.pdf', contentType: 'application/pdf', company: 'Acme' }, env)
+    assert.equal(url, 'https://drive.google.com/file/d/xyz/view')
+    assert.equal(seen.body.filename, 'deck.pdf')
+    assert.equal(seen.body.data, 'AQ==')
+  } finally {
+    globalThis.fetch = realFetch
+  }
+})
