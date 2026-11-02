@@ -116,6 +116,10 @@ export function normalizeSubmission(body) {
     deckText: clean(body.deckText, 12_000),
     screening: normalizeScreening(body.screening),
     deckBlob: body.deckBlob && typeof body.deckBlob === 'object' ? body.deckBlob : null,
+    deckFileUrl: /^https:\/\/drive\.google\.com\/file\/d\/[\w-]+\/view$/.test(String(body.deckFileUrl || ''))
+      ? String(body.deckFileUrl)
+      : null,
+    deckUploadFailed: body.deckUploadFailed === true,
   }
 }
 
@@ -300,7 +304,7 @@ export async function saveApplication(application) {
 
   let driveDeck = null
   if (application.deckBlob) driveDeck = await storeDeckInDrive(application)
-  const deckUrl = application.deckUrl || driveDeck?.url || null
+  const deckUrl = application.deckUrl || application.deckFileUrl || driveDeck?.url || null
   if (driveDeck?.url) application.deckFileUrl = driveDeck.url
   if (driveDeck?.failed) application.deckUploadFailed = true
 
